@@ -1,0 +1,42 @@
+name: Controller tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run simulator + tests in Docker
+        run: |
+          mkdir -p reports
+          docker compose up --build --abort-on-container-exit --exit-code-from tests
+
+      - name: Show results in the job summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          root = ET.parse("reports/junit.xml").getroot()
+          s = root if root.tag == "testsuite" else root.find("testsuite")
+          total, fail, err, skip = (int(s.get(k, 0)) for k in ("tests", "failures", "errors", "skipped"))
+          print("## Controller test results")
+          print(f"**{total - fail - err - skip} passed**, {fail} failed, {err} errors, {skip} skipped, in {float(s.get('time', 0)):.1f}s")
+          for case in s.iter("testcase"):
+              if case.find("failure") is not None or case.find("error") is not None:
+                  print(f"- FAILED: `{case.get('classname')}::{case.get('name')}`")
+          PY
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-report
+          path: reports/junit.xml
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down

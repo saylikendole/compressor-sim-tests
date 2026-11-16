@@ -1,0 +1,15 @@
+services:
+  simulator:
+    build: ./simulator
+    ports:
+      - "8000:8000"
+
+  tests:
+    build: ./tests
+    environment:
+      SIM_URL: http://simulator:8000
+    volumes:
+      - ./reports:/reports
+    depends_on:
+      simulator:
+        condition: service_healthy
